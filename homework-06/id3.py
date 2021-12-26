@@ -16,7 +16,7 @@ class Node:
 
 class ID3Classifier:
     CROSS_VAL = 10
-    MIN_SIZE_SET = 1
+    MIN_SIZE_SET = 3
 
     def encode_dataset(self, dataset):
 
@@ -32,47 +32,44 @@ class ID3Classifier:
         self.dataset = self.encode_dataset(self.dataset)
         self.dataset = pd.DataFrame(self.dataset)
 
-        # second_class = np.sum(self.dataset[0] == 1)
-        # self.dataset = self.dataset[-2 * second_class :]
-
+        np.random.seed(3)
         self.dataset = self.dataset.sample(frac=1).reset_index(drop=True)
 
-    def entropy(self, x, y):
-        if x == 0 or y == 0:
-            return 0
-        sum = x + y
-        x, y = x / sum, y / sum
-        return -x * np.log(x) - y * np.log(y)
+    def entropy(self, xs):
+        xs = xs / np.sum(xs)
+        return -np.sum([x * np.log(x) if x else 0 for x in xs])
 
     def target_entropy(self, x):
-        return self.entropy(np.sum(x[0] == 0), np.sum(x[0] == 1))
+        _, counts = np.unique(x[0], return_counts=True)
+        return self.entropy(counts)
 
-    def build_tree(self, train_dataset):
-        train_dataset = train_dataset.copy()
+    def build_tree(self, train_dataset, excluded_cols=[]):
         target_entropy = self.target_entropy(train_dataset)
         if (
             target_entropy == 0
-            or len(train_dataset.columns) == 1
+            or len(train_dataset.columns) == 1 + len(excluded_cols)
             or len(train_dataset) <= self.MIN_SIZE_SET
         ):
             self.node_cnt += 1
             return Node(round(np.mean(train_dataset[0])), None, {}, self.node_cnt)
 
-        best_entr, best_col = -1, 0
+        best_gain, best_col = -1, 0
 
         for column in train_dataset.columns[1:]:
+            if column in excluded_cols:
+                continue
             grouped = train_dataset.groupby(column).apply(
                 lambda x: x.count() * self.target_entropy(x)
             )[0]
-            entr = target_entropy - np.sum(grouped) / len(train_dataset)
-            if entr > best_entr:
-                best_entr, best_col = entr, column
+            gain = target_entropy - np.sum(grouped) / len(train_dataset)
+            if gain > best_gain:
+                best_gain, best_col = gain, column
+
+        next_excluded = excluded_cols + [best_col]
 
         children = {}
-        for attr_cls in list(set(train_dataset[best_col])):
-            next_datastep = train_dataset[train_dataset[best_col] == attr_cls]
-            next_datastep = next_datastep.drop([best_col], axis=1)
-            children[attr_cls] = self.build_tree(next_datastep)
+        for attr_cls, next_dataset in train_dataset.groupby(best_col):
+            children[attr_cls] = self.build_tree(next_dataset, next_excluded)
 
         self.node_cnt += 1
         return Node(None, best_col, children, self.node_cnt)
