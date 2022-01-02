@@ -1,10 +1,10 @@
-import enum
 import numpy as np
 from enum import Enum
+import matplotlib.pyplot as plt
 
 
 class NeuralNetwork:
-    def __init__(self, layers_sizes, learning_rate=10):
+    def __init__(self, layers_sizes, learning_rate=0.1):
         np.random.seed(1)
         self._layers = np.array(layers_sizes)
         self._learning_rate = learning_rate
@@ -51,7 +51,7 @@ class NeuralNetwork:
     def predict(self, x):
         return self._forward_prop(x)[-1]
 
-    def train(self, input_data, output_data, epochs=500):
+    def train(self, input_data, output_data, epochs=50000):
         for epoch in range(epochs):
             cost = 0
             for x, y in zip(input_data, output_data):
@@ -67,7 +67,8 @@ class NeuralNetwork:
                     self._update_weights(i, outputs[i], last_errors)
                     last_errors = curr_errors
             cost /= 2 * len(input_data)
-            print("Epoch: ", epoch, "Cost: ", cost)
+            if epoch % 100 == 0:
+                print("Epoch: ", epoch, "Cost: ", cost)
 
         print(self._weights)
         print(self._biases)
@@ -76,11 +77,26 @@ class NeuralNetwork:
         correct = 0
         for x, y in zip(input_data, output_data):
             a = self.predict(x)
-            print(x, y, a)
+            print("Input:", x, "Desired output:", y, "Output:", a)
             guess = np.round(a[0])
             if guess == y[0]:
                 correct += 1
         print("Accuracy: ", correct / len(input_data))
+
+    def visualize_space(self):
+        step, start, end = 0.01, -1, 2
+        outputs = []
+        for x in np.arange(start, end, step):
+            for y in np.arange(start, end, step):
+                outputs.append(self.predict([x, y])[0] * 100)
+
+        ss = np.arange(start, end, step)
+        xs = np.repeat(ss, len(ss))
+        ys = np.tile(ss, len(ss))
+
+        plt.scatter(xs, ys, c=outputs, cmap="cividis")
+        plt.scatter([0, 0, 1, 1], [0, 1, 0, 1], c=[[(0, 1, 0)]])
+        plt.show()
 
 
 class BooleanOperator(Enum):
@@ -105,8 +121,10 @@ def generate_boolean_data(op):
 
 
 if __name__ == "__main__":
-    nn = NeuralNetwork([2, 1, 1])
+    nn = NeuralNetwork([2, 2, 1])
     training_data = generate_boolean_data(BooleanOperator.XOR)
     nn.train(training_data[0], training_data[1])
     test_data = generate_boolean_data(BooleanOperator.XOR)
     nn.test(test_data[0], test_data[1])
+
+    nn.visualize_space()
